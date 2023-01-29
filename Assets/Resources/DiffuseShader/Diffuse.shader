@@ -50,9 +50,9 @@ Shader "Custom/Diffuse"
             {
                 //world space direction of directional light | from the source of light
                 float3 lightDirection = _WorldSpaceLightPos0.xyz;
-                float3 diffuseLight = saturate(dot(lightDirection, i.normal)) * _LightColor0; // saturate == max(0,x) 
+                float4 diffuseLight = saturate(dot(lightDirection, i.normal)) * _LightColor0; // saturate == max(0,x) 
 
-                return tex2D(_MainTex, i.uv) * float4(diffuseLight, 1);
+                return tex2D(_MainTex, i.uv) * diffuseLight;
             }
             ENDCG
         }
