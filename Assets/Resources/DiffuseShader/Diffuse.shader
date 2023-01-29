@@ -1,3 +1,4 @@
+//Lambertian diffuse shader
 Shader "Custom/Diffuse"
 {
     Properties
