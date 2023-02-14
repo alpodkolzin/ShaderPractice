@@ -1,5 +1,5 @@
 // specular shader
-Shader "Custom/Specular"
+Shader "Custom/SpecularPhong"
 {
     Properties
     {
