@@ -151,6 +151,15 @@ Shader "Custom/PBR"
 
                 float3 lambert = albedo/ UNITY_PI;
 
+                // note: Energy conservation "Fix"
+                // More to read;
+                // https://docs.google.com/document/d/1ZLT1-fIek2JkErN9ZPByeac02nWipMbO89oCW2jxzXo/edit -- why 1.0-kS fucks up microfacet models
+                // https://ubm-twvideo01.s3.amazonaws.com/o1/vault/gdc2017/Presentations/Hammon_Earl_PBR_Diffuse_Lighting.pdf -- normalization factor, good ggx approx for diffuse
+                //
+                // lambert *= 1.0 - F(_F0, normals, lightDirection); //Incoming light
+                // lambert *= 1.0 - F(_F0, normals, viewDirection); //Outgoing light
+                // lambert *= 1.05 * (1.0 - _F0);
+
                 float3 cookTorranceNumerator = D(alpha, normals, halfVector) * G(alpha, normals, viewDirection, lightDirection) * F(_F0, viewDirection, halfVector);
                 float cookTorranceDenominator = 4 * max(dot(viewDirection,normals), 0) * max(dot(lightDirection, normals), 0);
 
