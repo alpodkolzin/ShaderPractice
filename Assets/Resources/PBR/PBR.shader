@@ -8,10 +8,11 @@ Shader "Custom/PBR"
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
-        _Metallic("Metallic", Range(0,1)) = 0
+        _MainTex ("Albedo", 2D) = "white" {}
+        _Normals ("Normals", 2D) = "bump" {}
+        _Roughness("Roughness", 2D) = "black" {}
+        _Metallic("Metallic", 2D) = "black" {}
         [HideInInspector] _F0("F0", Range(0,1)) = 0
-        _Roughness("Roughness", Range(0,1)) = 0
     }
     SubShader
     {
@@ -29,6 +30,7 @@ Shader "Custom/PBR"
             {
                 float4 vertex : POSITION;
                 float3 normal : NORMAL;
+                float4 tangent : TANGENT; //xyz - tangent direction, w = tangent sign
                 float2 uv : TEXCOORD0;
             };
 
@@ -38,6 +40,9 @@ Shader "Custom/PBR"
                 float4 vertex : SV_POSITION;
                 float3 normal : TEXCOORD1;
                 float3 worldPos : TEXCOORD2;
+
+                float3 tangent : TEXCOORD3;
+                float3 biTangent : TEXCOORD4;
             };
 
             sampler2D _MainTex;
@@ -45,9 +50,10 @@ Shader "Custom/PBR"
             float4 _LightColor0; //Color of directional light source
             float _Gloss;
             float minZeroValue = 0.0001;
-            float _Metallic;
+            sampler2D _Metallic;
             float _F0;
-            float _Roughness;
+            sampler2D _Roughness;
+            sampler2D _Normals;
 
             v2f vert (appdata v)
             {
@@ -58,6 +64,9 @@ Shader "Custom/PBR"
 
                 // we need this to be rotatable and not stuck to the rotation & position
                 o.normal = UnityObjectToWorldNormal(v.normal);
+                o.tangent = UnityObjectToWorldDir(v.tangent.xyz);
+                o.biTangent = cross(o.normal, o.tangent);
+                o.biTangent *= v.tangent.w * unity_WorldTransformParams.w; // handle flipping and scaling
 
                 return o;
             }
@@ -99,18 +108,22 @@ Shader "Custom/PBR"
             //Fresnel-Schlick Function
             float3 F(float3 F0, float3 view, float3 halfVector)
             {
-                return F0 + (float3(1,1,1) - F0) * pow(1 - max(dot(view,halfVector), 0), 5);
+                return F0 + (1 - F0) * pow(1 - max(dot(view,halfVector), 0), 5);
             }
 
-
-            
             fixed4 frag (v2f i) : SV_Target
             {
                 //variables
 
                 // N
                 // we need to normalize normals, because they are interpolated between vertexes and it can result in some strange shading
-                float3 normals = normalize(i.normal); 
+                float3 tangentSpaceNormals = UnpackNormal(tex2D(_Normals, i.uv));
+                float3x3 mtxTangToWorld = {
+                    i.tangent.x, i.biTangent.x, i.normal.x,
+                    i.tangent.y, i.biTangent.y, i.normal.y,
+                    i.tangent.z, i.biTangent.z, i.normal.z
+                };
+                float3 normals = mul( mtxTangToWorld, tangentSpaceNormals);
 
                 // V
                 float3 viewDirection = normalize(_WorldSpaceCameraPos - i.worldPos); //from the surface to the camera
@@ -124,7 +137,8 @@ Shader "Custom/PBR"
 
                 float3 albedo = tex2D(_MainTex, i.uv);
 
-                float alpha = pow(_Roughness, 2);
+                float roughness = tex2D(_Roughness, i.uv);
+                float alpha = pow(roughness, 2);
                 float3 emission = 0;
 
                 // implement lazy "F0"
@@ -133,7 +147,7 @@ Shader "Custom/PBR"
                 //Calculation
 
                 float3 Ks = F(_F0, viewDirection, halfVector);
-                float3 Kd = (float3(1,1,1) - Ks) * (1 - _Metallic);
+                float3 Kd = (float3(1,1,1) - Ks) * (1 - tex2D(_Metallic, i.uv));
 
                 float3 lambert = albedo/ UNITY_PI;
 
