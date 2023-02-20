@@ -12,7 +12,8 @@ Shader "Custom/PBR"
         _Normals ("Normals", 2D) = "bump" {}
         _Roughness("Roughness", 2D) = "black" {}
         _Metallic("Metallic", 2D) = "black" {}
-        [HideInInspector] _F0("F0", Range(0,1)) = 0
+         // parameter that differs from material to material https://google.github.io/filament/Filament.html#table_fnormalmetals
+        _FresnelReflectance("FresnelReflectance", Color) = (0,0,0)
     }
     SubShader
     {
@@ -51,9 +52,9 @@ Shader "Custom/PBR"
             float _Gloss;
             float minZeroValue = 0.0001;
             sampler2D _Metallic;
-            float _F0;
             sampler2D _Roughness;
             sampler2D _Normals;
+            float3 _FresnelReflectance;
 
             v2f vert (appdata v)
             {
@@ -83,7 +84,7 @@ Shader "Custom/PBR"
                 float numerator = pow(alpha, 2);
                 float NdotH = max(dot(normal, halfVector), 0);
                 float denominator = UNITY_PI * pow(pow(NdotH, 2) * (pow(alpha, 2) - 1 ) + 1, 2);
-                denominator - max(denominator, minZeroValue);
+                denominator = max(denominator, minZeroValue);
 
                 return numerator/denominator;
             }
@@ -123,7 +124,8 @@ Shader "Custom/PBR"
                     i.tangent.y, i.biTangent.y, i.normal.y,
                     i.tangent.z, i.biTangent.z, i.normal.z
                 };
-                float3 normals = mul( mtxTangToWorld, tangentSpaceNormals);
+
+                float3 normals = normalize(mul( mtxTangToWorld, tangentSpaceNormals));
 
                 // V
                 float3 viewDirection = normalize(_WorldSpaceCameraPos - i.worldPos); //from the surface to the camera
@@ -136,18 +138,23 @@ Shader "Custom/PBR"
                 float3 halfVector = normalize(lightDirection + viewDirection );
 
                 float3 albedo = tex2D(_MainTex, i.uv);
-
                 float roughness = tex2D(_Roughness, i.uv);
                 float alpha = pow(roughness, 2);
                 float3 emission = 0;
+                float metallic = tex2D(_Metallic, i.uv);
 
-                // implement lazy "F0"
-                _F0 = albedo;
+                // implement F0 calculation from https://google.github.io/filament/Filament.html#listing_fnormal
+                float3 _F0 = 0.16 * pow(_FresnelReflectance, 2) * (1.0 - metallic) + albedo * metallic;
 
+                // option: lazy F0
+                // float3 _F0 = albedo;
+
+                //-----------
                 //Calculation
+                //-----------
 
                 float3 Ks = F(_F0, viewDirection, halfVector);
-                float3 Kd = (float3(1,1,1) - Ks) * (1 - tex2D(_Metallic, i.uv));
+                float3 Kd = (float3(1,1,1) - Ks) * (1 - metallic);
 
                 float3 lambert = albedo/ UNITY_PI;
 
