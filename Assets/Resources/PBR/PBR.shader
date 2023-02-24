@@ -14,7 +14,7 @@ Shader "Custom/PBR"
         _Metallic("Metallic", 2D) = "black" {}
          // parameter that differs from material to material https://google.github.io/filament/Filament.html#table_fnormalmetals
         _FresnelReflectance("FresnelReflectance", Color) = (0,0,0)
-        _AmbientOcclusion("AmbientOcclusion", 2D) = "black" {}
+        _AmbientOcclusion("AmbientOcclusion", 2D) = "gray" {}
         _IBLTexture("IBLTexture", 2D) = "black" {}
         _IBLStrength("IBLStrength", Range(0,1)) = 0.5
     }
