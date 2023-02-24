@@ -14,6 +14,9 @@ Shader "Custom/PBR"
         _Metallic("Metallic", 2D) = "black" {}
          // parameter that differs from material to material https://google.github.io/filament/Filament.html#table_fnormalmetals
         _FresnelReflectance("FresnelReflectance", Color) = (0,0,0)
+        _AmbientOcclusion("AmbientOcclusion", 2D) = "black" {}
+        _IBLTexture("IBLTexture", 2D) = "black" {}
+        _IBLStrength("IBLStrength", Range(0,1)) = 0.5
     }
     SubShader
     {
@@ -26,6 +29,8 @@ Shader "Custom/PBR"
             #pragma vertex vert
             #pragma fragment frag
             #include "UnityCG.cginc"
+
+            #define TAU 6.28318530718
 
             struct appdata
             {
@@ -47,14 +52,17 @@ Shader "Custom/PBR"
             };
 
             sampler2D _MainTex;
-            float4 _MainTex_ST;
-            float4 _LightColor0; //Color of directional light source
-            float _Gloss;
-            float minZeroValue = 0.0001;
             sampler2D _Metallic;
             sampler2D _Roughness;
             sampler2D _Normals;
+            sampler2D _AmbientOcclusion;
+            sampler2D _IBLTexture;
+
+            float4 _MainTex_ST;
+            float4 _LightColor0; //Color of directional light source
             float3 _FresnelReflectance;
+            float _IBLStrength;
+            float minZeroValue = 0.0001;
 
             v2f vert (appdata v)
             {
@@ -77,9 +85,8 @@ Shader "Custom/PBR"
             // maybe can be replaced with saturate
             // NO division by zero -> X / max(Y,0.000001);
 
-
             // GGX/Trowbridge-Teitz Normal Distribution Function
-            float D (float alpha, float3 normal, float3 halfVector)
+            float NDF (float alpha, float3 normal, float3 halfVector)
             {
                 float numerator = pow(alpha, 2);
                 float NdotH = max(dot(normal, halfVector), 0);
@@ -110,6 +117,20 @@ Shader "Custom/PBR"
             float3 F(float3 F0, float3 view, float3 halfVector)
             {
                 return F0 + (1 - F0) * pow(1 - max(dot(view,halfVector), 0), 5);
+            }
+
+            //Fresnel-Schlick Function From Roughness
+            float3 FRoughness(float cosTheta, float F0, float roughness)
+            {
+                return F0 + (max(1.0 - roughness, F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+            }
+
+            //Calcualte from normal direction to Equirectangular
+            float2 DirToEquirectangular(float3 dir)
+            {
+                float x = atan2(dir.z, dir.x) / TAU + 0.5;
+                float y = dir.y * 0.5 + 0.5;
+                return float2(x,y);
             }
 
             fixed4 frag (v2f i) : SV_Target
@@ -144,19 +165,31 @@ Shader "Custom/PBR"
                 float metallic = tex2D(_Metallic, i.uv);
 
                 // implement F0 calculation from https://google.github.io/filament/Filament.html#listing_fnormal
-                float3 _F0 = 0.16 * pow(_FresnelReflectance, 2) * (1.0 - metallic) + albedo * metallic;
+                float3 F0 = 0.16 * pow(_FresnelReflectance, 2) * (1.0 - metallic) + albedo * metallic;
 
                 // option: lazy F0
                 // float3 _F0 = albedo;
 
                 //-----------
-                //Calculation
+                //IBL Calculation (SIMPLE VERSION)
                 //-----------
 
-                float3 Ks = F(_F0, viewDirection, halfVector);
-                float3 Kd = (float3(1,1,1) - Ks) * (1 - metallic);
+                float3 KsIBL = FRoughness(max(dot(normals, viewDirection), 0.0), F0, roughness); 
+                float3 KdIBL = 1.0 - KsIBL;
+                float3 diffuseIBL = tex2Dlod(_IBLTexture, float4(DirToEquirectangular(normals),7,7));
 
-                float3 lambert = albedo/ UNITY_PI;
+                float3 viewReflection = reflect(-viewDirection,normals);
+                float mipLevel = roughness * 7;
+                float3 specularIBL = tex2Dlod(_IBLTexture, float4(DirToEquirectangular(viewReflection), mipLevel, mipLevel));
+                float3 specular = KsIBL * specularIBL; // there is no BRDF specular IBL so far
+                float3 ambient = (KdIBL * diffuseIBL * albedo + specular) * tex2D(_AmbientOcclusion, i.uv) * _IBLStrength;
+
+                //-----------
+                // Base Calculation
+                //-----------
+
+                float3 Ks = F(F0, viewDirection, halfVector);
+                float3 Kd = (1 - Ks) * (1 - metallic);
 
                 // note: Energy conservation "Fix"
                 // More to read;
@@ -167,14 +200,14 @@ Shader "Custom/PBR"
                 // lambert *= 1.0 - F(_F0, normals, viewDirection); //Outgoing light
                 // lambert *= 1.05 * (1.0 - _F0);
 
-                float3 cookTorranceNumerator = D(alpha, normals, halfVector) * G(alpha, normals, viewDirection, lightDirection) * F(_F0, viewDirection, halfVector);
+                float3 cookTorranceNumerator = NDF(alpha, normals, halfVector) * G(alpha, normals, viewDirection, lightDirection) * F(F0, viewDirection, halfVector);
                 float cookTorranceDenominator = 4 * max(dot(viewDirection,normals), 0) * max(dot(lightDirection, normals), 0);
-
                 cookTorranceDenominator = max(cookTorranceDenominator, minZeroValue);
-                float3 cookTorrance = cookTorranceNumerator/cookTorranceDenominator;
+                float3 cookTorrance = max(cookTorranceNumerator/cookTorranceDenominator, minZeroValue); // HACK: without max created black "non additive shadow"
 
-                float3 BRDF = Kd * lambert + cookTorrance;
+                float3 BRDF = Kd * albedo / UNITY_PI + cookTorrance;
                 float3 outgoingLight = emission + BRDF * _LightColor0 * max(dot(lightDirection, normals), 0);
+                outgoingLight += ambient;
 
                 return float4(outgoingLight,1);
 
