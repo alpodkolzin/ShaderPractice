@@ -118,9 +118,9 @@ Shader "Custom/PBR"
             }
 
             //Fresnel-Schlick Function
-            float3 F(float3 F0, float3 view, float3 halfVector)
+            float3 F(float3 F0, float3 normals, float3 halfVector)
             {
-                return F0 + (1 - F0) * pow(1 - max(dot(view,halfVector), 0), 5);
+                return F0 + (1 - F0) * pow(1 - max(dot(normals ,halfVector), 0), 5);
             }
 
             //Fresnel-Schlick Function From Roughness
@@ -202,7 +202,7 @@ Shader "Custom/PBR"
                 // Base Calculation
                 //-----------
 
-                float3 Ks = F(F0, viewDirection, halfVector);
+                float3 Ks = F(F0, normals, halfVector);
                 float3 Kd = (1 - Ks) * (1 - metallic);
 
                 // note: Energy conservation "Fix"
@@ -214,7 +214,7 @@ Shader "Custom/PBR"
                 // lambert *= 1.0 - F(_F0, normals, viewDirection); //Outgoing light
                 // lambert *= 1.05 * (1.0 - _F0);
 
-                float3 cookTorranceNumerator = NDF(alpha, NdotH) * G(alpha, NdotV, NdotL) * F(F0, viewDirection, halfVector);
+                float3 cookTorranceNumerator = NDF(alpha, NdotH) * G(alpha, NdotV, NdotL) * Ks;
                 float cookTorranceDenominator = 4 * NdotV * NdotL;
                 cookTorranceDenominator = max(cookTorranceDenominator, minZeroValue);
                 float3 cookTorrance = max(cookTorranceNumerator/cookTorranceDenominator, minZeroValue); // HACK: without max created black "non additive shadow"
