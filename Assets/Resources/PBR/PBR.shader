@@ -17,6 +17,7 @@ Shader "Custom/PBR"
         _AmbientOcclusion("AmbientOcclusion", 2D) = "gray" {}
         _IBLTexture("IBLTexture", 2D) = "black" {}
         _IBLStrength("IBLStrength", Range(0,1)) = 0.5
+        _IBLBRDFLUT("IBLBRDFLUT", 2D) = "black" {}
     }
     SubShader
     {
@@ -57,6 +58,7 @@ Shader "Custom/PBR"
             sampler2D _Normals;
             sampler2D _AmbientOcclusion;
             sampler2D _IBLTexture;
+            sampler2D _IBLBRDFLUT;
 
             float4 _MainTex_ST;
             float4 _LightColor0; //Color of directional light source
@@ -179,9 +181,13 @@ Shader "Custom/PBR"
                 float3 diffuseIBL = tex2Dlod(_IBLTexture, float4(DirToEquirectangular(normals),7,7));
 
                 float3 viewReflection = reflect(-viewDirection,normals);
-                float mipLevel = roughness * 7;
+
+                const float MAX_REFLECTION_LOD = 7;
+                float mipLevel = roughness * MAX_REFLECTION_LOD;
                 float3 specularIBL = tex2Dlod(_IBLTexture, float4(DirToEquirectangular(viewReflection), mipLevel, mipLevel));
-                float3 specular = KsIBL * specularIBL; // there is no BRDF specular IBL so far
+;
+                float2 envBRDF  = tex2D(_IBLBRDFLUT, float2(max(dot(normals, viewDirection), 0), roughness)).rg;
+                float3 specular = specularIBL * (KsIBL * envBRDF.x + envBRDF.y);
                 float3 ambient = (KdIBL * diffuseIBL * albedo + specular) * tex2D(_AmbientOcclusion, i.uv) * _IBLStrength;
 
                 //-----------

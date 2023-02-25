@@ -48,6 +48,10 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _IBLBRDFLUT:
+        m_Texture: {fileID: 2800000, guid: 1ee3dc6394fa740ec9d8dc0f1e786b0c, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _IBLTexture:
         m_Texture: {fileID: 2800000, guid: 246427fd04a3b473eb4e882c9ddf68a5, type: 3}
         m_Scale: {x: 1, y: 1}
@@ -93,6 +97,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0.5
     - _GlossyReflections: 1
+    - _IBLStrength: 1
     - _Metallic: 1
     - _Mode: 0
     - _OcclusionStrength: 1
