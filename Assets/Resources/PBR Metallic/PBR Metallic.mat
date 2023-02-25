@@ -98,6 +98,7 @@ Material:
     - _Glossiness: 0.5
     - _GlossyReflections: 1
     - _IBLStrength: 1
+    - _MaxReflectionLOD: 7
     - _Metallic: 1
     - _Mode: 0
     - _OcclusionStrength: 1

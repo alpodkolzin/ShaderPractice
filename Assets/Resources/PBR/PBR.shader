@@ -18,6 +18,7 @@ Shader "Custom/PBR"
         _IBLTexture("IBLTexture", 2D) = "black" {}
         _IBLStrength("IBLStrength", Range(0,1)) = 0.5
         _IBLBRDFLUT("IBLBRDFLUT", 2D) = "black" {}
+        _MaxReflectionLOD("MaxReflectionLOD", Range(0,10)) = 7
     }
     SubShader
     {
@@ -64,6 +65,8 @@ Shader "Custom/PBR"
             float4 _LightColor0; //Color of directional light source
             float3 _FresnelReflectance;
             float _IBLStrength;
+            float _MaxReflectionLOD;
+
             float minZeroValue = 0.0001;
 
             v2f vert (appdata v)
@@ -88,10 +91,9 @@ Shader "Custom/PBR"
             // NO division by zero -> X / max(Y,0.000001);
 
             // GGX/Trowbridge-Teitz Normal Distribution Function
-            float NDF (float alpha, float3 normal, float3 halfVector)
+            float NDF (float alpha, float NdotH)
             {
                 float numerator = pow(alpha, 2);
-                float NdotH = max(dot(normal, halfVector), 0);
                 float denominator = UNITY_PI * pow(pow(NdotH, 2) * (pow(alpha, 2) - 1 ) + 1, 2);
                 denominator = max(denominator, minZeroValue);
 
@@ -99,20 +101,20 @@ Shader "Custom/PBR"
             }
 
             // Schlick-Beckmann Geometry Shadowing Function
-            float G1(float alpha, float3 normal, float3 X)
+            float G1(float alpha, float cosTheta)
             {
-                float numerator = max(dot(normal, X), 0);
+                float numerator = cosTheta;
                 float k = alpha / 2;
-                float denominator = max(dot(normal,X),0) * (1-k) + k;
+                float denominator = cosTheta * (1-k) + k;
                 denominator = max(denominator, minZeroValue);
 
                 return numerator/denominator;
             }
 
             //Smith Model
-            float G(float alpha, float3 normal, float3 view, float3 light)
+            float G(float alpha, float NdotV, float NdotL)
             {
-                return G1(alpha, normal,view) * G1(alpha, normal,light);
+                return G1(alpha, NdotV) * G1(alpha, NdotL);
             }
 
             //Fresnel-Schlick Function
@@ -158,7 +160,7 @@ Shader "Custom/PBR"
                 float3 lightDirection = normalize(_WorldSpaceLightPos0.xyz);
 
                 // H
-                float3 halfVector = normalize(lightDirection + viewDirection );
+                float3 halfVector = normalize(lightDirection + viewDirection);
 
                 float3 albedo = tex2D(_MainTex, i.uv);
                 float roughness = tex2D(_Roughness, i.uv);
@@ -166,27 +168,33 @@ Shader "Custom/PBR"
                 float3 emission = 0;
                 float metallic = tex2D(_Metallic, i.uv);
 
+                // option: lazy F0
+                // float3 _F0 = albedo;
                 // implement F0 calculation from https://google.github.io/filament/Filament.html#listing_fnormal
                 float3 F0 = 0.16 * pow(_FresnelReflectance, 2) * (1.0 - metallic) + albedo * metallic;
 
-                // option: lazy F0
-                // float3 _F0 = albedo;
-
                 //-----------
-                //IBL Calculation (SIMPLE VERSION)
+                // Common variables 
                 //-----------
 
-                float3 KsIBL = FRoughness(max(dot(normals, viewDirection), 0.0), F0, roughness); 
+                float NdotH = max(dot(normals, halfVector), 0);
+                float NdotV = max(dot(normals, viewDirection), 0);
+                float NdotL = max(dot(normals, lightDirection), 0);
+
+                //-----------
+                // IBL Calculation
+                //-----------
+
+                float3 KsIBL = FRoughness(NdotV, F0, roughness); 
                 float3 KdIBL = 1.0 - KsIBL;
-                float3 diffuseIBL = tex2Dlod(_IBLTexture, float4(DirToEquirectangular(normals),7,7));
+                float3 diffuseIBL = tex2Dlod(_IBLTexture, float4(DirToEquirectangular(normals), _MaxReflectionLOD.xx));
 
                 float3 viewReflection = reflect(-viewDirection,normals);
 
-                const float MAX_REFLECTION_LOD = 7;
-                float mipLevel = roughness * MAX_REFLECTION_LOD;
+                float mipLevel = roughness * _MaxReflectionLOD;
                 float3 specularIBL = tex2Dlod(_IBLTexture, float4(DirToEquirectangular(viewReflection), mipLevel, mipLevel));
 ;
-                float2 envBRDF  = tex2D(_IBLBRDFLUT, float2(max(dot(normals, viewDirection), 0), roughness)).rg;
+                float2 envBRDF  = tex2D(_IBLBRDFLUT, float2(NdotV, roughness)).rg;
                 float3 specular = specularIBL * (KsIBL * envBRDF.x + envBRDF.y);
                 float3 ambient = (KdIBL * diffuseIBL * albedo + specular) * tex2D(_AmbientOcclusion, i.uv) * _IBLStrength;
 
@@ -206,13 +214,13 @@ Shader "Custom/PBR"
                 // lambert *= 1.0 - F(_F0, normals, viewDirection); //Outgoing light
                 // lambert *= 1.05 * (1.0 - _F0);
 
-                float3 cookTorranceNumerator = NDF(alpha, normals, halfVector) * G(alpha, normals, viewDirection, lightDirection) * F(F0, viewDirection, halfVector);
-                float cookTorranceDenominator = 4 * max(dot(viewDirection,normals), 0) * max(dot(lightDirection, normals), 0);
+                float3 cookTorranceNumerator = NDF(alpha, NdotH) * G(alpha, NdotV, NdotL) * F(F0, viewDirection, halfVector);
+                float cookTorranceDenominator = 4 * NdotV * NdotL;
                 cookTorranceDenominator = max(cookTorranceDenominator, minZeroValue);
                 float3 cookTorrance = max(cookTorranceNumerator/cookTorranceDenominator, minZeroValue); // HACK: without max created black "non additive shadow"
 
                 float3 BRDF = Kd * albedo / UNITY_PI + cookTorrance;
-                float3 outgoingLight = emission + BRDF * _LightColor0 * max(dot(lightDirection, normals), 0);
+                float3 outgoingLight = emission + BRDF * _LightColor0 * NdotL;
                 outgoingLight += ambient;
 
                 return float4(outgoingLight,1);
