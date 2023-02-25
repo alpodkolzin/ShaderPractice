@@ -118,15 +118,15 @@ Shader "Custom/PBR"
             }
 
             //Fresnel-Schlick Function
-            float3 F(float3 F0, float3 normals, float3 halfVector)
+            float3 F(float3 F0, float NdotH)
             {
-                return F0 + (1 - F0) * pow(1 - max(dot(normals ,halfVector), 0), 5);
+                return F0 + (1 - F0) * pow(1 - NdotH, 5);
             }
 
             //Fresnel-Schlick Function From Roughness
-            float3 FRoughness(float cosTheta, float F0, float roughness)
+            float3 FRoughness(float NdotV, float F0, float roughness)
             {
-                return F0 + (max(1.0 - roughness, F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+                return F0 + (max(1.0 - roughness, F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
             }
 
             //Calcualte from normal direction to Equirectangular
@@ -202,7 +202,7 @@ Shader "Custom/PBR"
                 // Base Calculation
                 //-----------
 
-                float3 Ks = F(F0, normals, halfVector);
+                float3 Ks = F(F0, NdotH);
                 float3 Kd = (1 - Ks) * (1 - metallic);
 
                 // note: Energy conservation "Fix"
