@@ -62,3 +62,4 @@ crashlytics-build.properties
 # Exclude Rider files
 
 /.idea
+.DS_Store
