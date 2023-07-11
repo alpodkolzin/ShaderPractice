@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MetalAlbedoHeat
+  m_Shader: {fileID: 4800000, guid: a7ed53bb8f99043af94810ed5a1967de, type: 3}
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: 1b07edae06f7e4e32b51998d6c3cf6e1, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _Alpha: 1
+    - _ExtraValue: 1
+    - _HCenter: 0.5
+    - _HNew: 0
+    - _HRadius: 0.5
+    - _VFactor: 0
+    m_Colors:
+    - _BaseColor: {r: 0.5294118, g: 0.52156866, b: 0.5137255, a: 0}
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _HighHeat: {r: 1, g: 0.43647787, b: 0.05098039, a: 0}
+    - _LowHeat: {r: 0.69803923, g: 0.07058822, b: 0.2898666, a: 0}
+  m_BuildTextureStacks: []
